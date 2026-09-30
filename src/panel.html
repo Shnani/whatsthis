@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="utf-8" />
+		<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+		<title>这是什么？</title>
+		<style>
+			:root {
+				/* 不透明：一旦留了 alpha，就会去采样窗口背后的内容，正是伪影的来源 */
+				--bg: #1e1e21;
+				--line: rgba(255, 255, 255, 0.1);
+				--fg: #f2f2f7;
+				--muted: rgba(235, 235, 245, 0.6);
+				--danger: #ff6b6b;
+				--accent: #4a9eff;
+				--code-bg: rgba(255, 255, 255, 0.08);
+			}
+			@media (prefers-color-scheme: light) {
+				:root {
+					--bg: #f7f7f7;
+					--line: rgba(0, 0, 0, 0.1);
+					--fg: #1c1c1e;
+					--muted: rgba(60, 60, 67, 0.6);
+					--danger: #d70015;
+					--accent: #0a6fdb;
+					--code-bg: rgba(0, 0, 0, 0.055);
+				}
+			}
+			* {
+				box-sizing: border-box;
+			}
+			html,
+			body {
+				margin: 0;
+				height: 100%;
+				background: transparent;
+				overflow: hidden;
+			}
+			body {
+				font: 13px/1.55 -apple-system, "SF Pro Text", "PingFang SC", sans-serif;
+				color: var(--fg);
+				-webkit-font-smoothing: antialiased;
+			}
+			.panel {
+				display: flex;
+				flex-direction: column;
+				height: 100%;
+				margin: 6px;
+				border-radius: 12px;
+				background: var(--bg);
+				border: 1px solid var(--line);
+				overflow: hidden;
+				/* 不要在这里加 box-shadow：6px 边距放不下 32px 的模糊，会被窗口边缘硬切出直线。
+				   阴影交给 macOS 画（BrowserWindow 的 hasShadow），随窗口形状走，不会被裁。 */
+			}
+			header {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				padding: 10px 12px;
+				border-bottom: 1px solid var(--line);
+				flex: none;
+			}
+			header .title {
+				font-weight: 600;
+			}
+			header .source,
+			header .model {
+				font-size: 11px;
+				color: var(--muted);
+				border: 1px solid var(--line);
+				border-radius: 5px;
+				padding: 1px 6px;
+				max-width: 190px;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			header .source:empty {
+				display: none;
+			}
+			header .spacer {
+				flex: 1;
+			}
+			header button {
+				all: unset;
+				cursor: pointer;
+				color: var(--muted);
+				font-size: 15px;
+				line-height: 1;
+				padding: 3px 5px;
+				border-radius: 5px;
+			}
+			header button:hover {
+				color: var(--fg);
+				background: var(--line);
+			}
+			main {
+				flex: 1;
+				display: flex;
+				flex-direction: column;
+				gap: 10px;
+				padding: 12px;
+				overflow-y: auto;
+			}
+			.preview {
+				flex: none;
+				border: 1px solid var(--line);
+				border-radius: 8px;
+				padding: 8px 10px;
+				color: var(--muted);
+				font-size: 12px;
+				max-height: 96px;
+				overflow: hidden;
+				white-space: pre-wrap;
+				word-break: break-word;
+			}
+			.preview.image {
+				padding: 0;
+				border: none;
+				max-height: 120px;
+				display: flex;
+				justify-content: center;
+			}
+			.preview.image img {
+				max-width: 100%;
+				max-height: 120px;
+				border-radius: 8px;
+				border: 1px solid var(--line);
+				object-fit: contain;
+			}
+			#answer {
+				flex: 1;
+				word-break: break-word;
+			}
+			#answer:empty::after {
+				content: "思考中…";
+				color: var(--muted);
+			}
+			#answer.error {
+				color: var(--danger);
+				white-space: pre-wrap;
+			}
+
+			/* Markdown 渲染出来的元素 */
+			#answer > :first-child {
+				margin-top: 0;
+			}
+			#answer > :last-child {
+				margin-bottom: 0;
+			}
+			#answer p,
+			#answer ul,
+			#answer ol,
+			#answer pre,
+			#answer blockquote,
+			#answer table {
+				margin: 0 0 10px;
+			}
+			#answer h1,
+			#answer h2,
+			#answer h3,
+			#answer h4 {
+				margin: 14px 0 8px;
+				line-height: 1.35;
+			}
+			#answer h1 {
+				font-size: 17px;
+			}
+			#answer h2 {
+				font-size: 15px;
+			}
+			#answer h3,
+			#answer h4 {
+				font-size: 13.5px;
+			}
+			#answer ul,
+			#answer ol {
+				padding-left: 20px;
+			}
+			#answer li {
+				margin: 3px 0;
+			}
+			#answer code {
+				font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace;
+				background: var(--code-bg);
+				border-radius: 4px;
+				padding: 1px 4px;
+			}
+			#answer pre {
+				background: var(--code-bg);
+				border: 1px solid var(--line);
+				border-radius: 8px;
+				padding: 8px 10px;
+				overflow-x: auto;
+			}
+			#answer pre code {
+				display: block;
+				background: none;
+				padding: 0;
+				white-space: pre;
+			}
+			#answer a {
+				color: var(--accent);
+				text-decoration: none;
+				cursor: pointer;
+			}
+			#answer a:hover {
+				text-decoration: underline;
+			}
+			#answer blockquote {
+				border-left: 3px solid var(--line);
+				padding-left: 10px;
+				color: var(--muted);
+			}
+			#answer table {
+				border-collapse: collapse;
+				font-size: 12px;
+			}
+			#answer th,
+			#answer td {
+				border: 1px solid var(--line);
+				padding: 4px 8px;
+				text-align: left;
+			}
+			#answer hr {
+				border: none;
+				border-top: 1px solid var(--line);
+				margin: 12px 0;
+			}
+			.cursor::after {
+				content: "▌";
+				color: var(--muted);
+				animation: blink 1s steps(2, start) infinite;
+			}
+			@keyframes blink {
+				to {
+					visibility: hidden;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<div class="panel">
+			<header>
+				<span class="title">这是什么？</span>
+				<span class="source" id="source"></span>
+				<span class="model" id="model"></span>
+				<span class="spacer"></span>
+				<button id="close" title="关闭（Esc）">✕</button>
+			</header>
+			<main>
+				<div class="preview" id="preview" hidden></div>
+				<div id="answer"></div>
+			</main>
+		</div>
+		<script>
+			const api = window.whatsthis;
+			if (!api) {
+				document.getElementById("answer").textContent =
+					"这个页面要在 What's This? 应用里打开（点菜单栏图标）。在浏览器里直接打开不会加载 preload 脚本。";
+				throw new Error("window.whatsthis 不存在：页面没有跑在 Electron 里");
+			}
+			const $model = document.getElementById("model");
+			const $source = document.getElementById("source");
+			const $preview = document.getElementById("preview");
+			const $answer = document.getElementById("answer");
+			const $main = document.querySelector("main");
+			const $close = document.getElementById("close");
+
+			const SOURCE_LABEL = {
+				selection: "选中文字",
+				text: "剪切板文字",
+				image: "剪切板图片",
+			};
+
+			$close.addEventListener("click", () => api.closePanel());
+			document.addEventListener("keydown", (e) => {
+				if (e.key === "Escape") api.closePanel();
+			});
+
+			api.onStart((payload) => {
+				$model.textContent = payload.model || "";
+				$source.textContent = SOURCE_LABEL[payload.kind] || "";
+				$answer.textContent = "";
+				$answer.classList.remove("error");
+				$answer.classList.add("cursor");
+
+				$preview.hidden = true;
+				$preview.className = "preview";
+				$preview.textContent = "";
+
+				if (payload.kind === "image" && payload.dataUrl) {
+					const img = document.createElement("img");
+					img.src = payload.dataUrl;
+					$preview.classList.add("image");
+					$preview.appendChild(img);
+					$preview.hidden = false;
+				} else if (payload.text) {
+					$preview.textContent = payload.text;
+					$preview.hidden = false;
+				}
+			});
+
+			// 主进程已经把 Markdown 渲染成 HTML 了（顺带做了转义和链接过滤）
+			api.onHtml((html) => {
+				// 用户往上翻看历史时别把他拽回底部
+				const stick = $main.scrollTop + $main.clientHeight >= $main.scrollHeight - 32;
+				$answer.innerHTML = html;
+				if (stick) $main.scrollTop = $main.scrollHeight;
+			});
+
+			// 链接一律交给系统浏览器，绝不让浮窗自己被导航走
+			$answer.addEventListener("click", (event) => {
+				const link = event.target.closest("a");
+				if (!link) return;
+				event.preventDefault();
+				api.openExternal(link.getAttribute("href"));
+			});
+
+			api.onDone(() => {
+				$answer.classList.remove("cursor");
+				$main.scrollTop = $main.scrollHeight;
+			});
+
+			api.onError((message) => {
+				$answer.classList.remove("cursor");
+				$answer.classList.add("error");
+				$answer.textContent = message;
+			});
+		</script>
+	</body>
+</html>

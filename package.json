@@ -1,0 +1,26 @@
+{
+	"name": "whatsthis",
+	"version": "0.1.0",
+	"private": true,
+	"description": "macOS 菜单栏插件：点击图标读取剪切板，向 AI 提问「这是什么？」",
+	"type": "module",
+	"main": "dist/main.js",
+	"scripts": {
+		"build": "npm run build:native && tsc",
+		"build:native": "node scripts/build-native.mjs",
+		"start": "npm run build && electron .",
+		"app": "npm run build && open -a \"$PWD/node_modules/electron/dist/Electron.app\" --args \"$PWD\"",
+		"verify": "npm run build && electron test/verify.mjs",
+		"watch": "tsc --watch"
+	},
+	"dependencies": {
+		"@mariozechner/pi-agent-core": "file:mariozechner-pi-agent-core-0.73.0.tgz",
+		"@mariozechner/pi-ai": "file:mariozechner-pi-ai-0.73.0.tgz",
+		"marked": "^18.0.14"
+	},
+	"devDependencies": {
+		"@types/node": "^24.3.0",
+		"electron": "^44.5.0",
+		"typescript": "^5.7.3"
+	}
+}

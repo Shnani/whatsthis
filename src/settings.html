@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="utf-8" />
+		<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+		<title>What's This? 设置</title>
+		<style>
+			:root {
+				--fg: #1c1c1e;
+				--muted: rgba(60, 60, 67, 0.6);
+				--line: rgba(0, 0, 0, 0.14);
+				--field: #fff;
+				--accent: #0a84ff;
+				--danger: #d70015;
+				--ok: #1a7f37;
+			}
+			@media (prefers-color-scheme: dark) {
+				:root {
+					--fg: #f2f2f7;
+					--muted: rgba(235, 235, 245, 0.6);
+					--line: rgba(255, 255, 255, 0.16);
+					--field: rgba(255, 255, 255, 0.06);
+					--accent: #0a84ff;
+					--danger: #ff6b6b;
+					--ok: #4ade80;
+				}
+			}
+			* {
+				box-sizing: border-box;
+			}
+			body {
+				margin: 0;
+				padding: 20px;
+				font: 13px/1.5 -apple-system, "SF Pro Text", "PingFang SC", sans-serif;
+				color: var(--fg);
+				background: Canvas;
+				-webkit-font-smoothing: antialiased;
+			}
+			h1 {
+				font-size: 15px;
+				margin: 0 0 4px;
+			}
+			p.hint {
+				margin: 0 0 18px;
+				color: var(--muted);
+				font-size: 12px;
+			}
+			label {
+				display: block;
+				font-size: 12px;
+				color: var(--muted);
+				margin-bottom: 6px;
+			}
+			.row {
+				display: flex;
+				gap: 8px;
+				margin-bottom: 16px;
+			}
+			input,
+			select {
+				flex: 1;
+				min-width: 0;
+				font: inherit;
+				color: var(--fg);
+				background: var(--field);
+				border: 1px solid var(--line);
+				border-radius: 7px;
+				padding: 7px 9px;
+				outline: none;
+			}
+			input:focus,
+			select:focus {
+				border-color: var(--accent);
+			}
+			button {
+				font: inherit;
+				color: var(--fg);
+				background: var(--field);
+				border: 1px solid var(--line);
+				border-radius: 7px;
+				padding: 7px 14px;
+				cursor: pointer;
+				white-space: nowrap;
+			}
+			button:hover:not(:disabled) {
+				border-color: var(--accent);
+			}
+			button:disabled {
+				opacity: 0.45;
+				cursor: default;
+			}
+			button.primary {
+				color: #fff;
+				background: var(--accent);
+				border-color: transparent;
+			}
+			button.primary:disabled {
+				opacity: 0.4;
+			}
+			footer {
+				display: flex;
+				align-items: center;
+				gap: 12px;
+				margin-top: 4px;
+			}
+			#status {
+				font-size: 12px;
+				color: var(--muted);
+				flex: 1;
+				word-break: break-word;
+			}
+			#status.error {
+				color: var(--danger);
+			}
+			#status.ok {
+				color: var(--ok);
+			}
+		</style>
+	</head>
+	<body>
+		<h1>What's This? 设置</h1>
+		<p class="hint">填入 DeepSeek API Key，点击「获取模型列表」，选一个模型保存。之后点击菜单栏图标即可提问。</p>
+
+		<label for="apiKey">DeepSeek API Key</label>
+		<div class="row">
+			<input id="apiKey" type="password" placeholder="sk-…" autocomplete="off" spellcheck="false" />
+			<button id="fetch">获取模型列表</button>
+		</div>
+
+		<label for="model">模型</label>
+		<div class="row">
+			<select id="model" disabled>
+				<option value="">请先获取模型列表</option>
+			</select>
+		</div>
+
+		<footer>
+			<span id="status"></span>
+			<button id="cancel">关闭</button>
+			<button id="save" class="primary" disabled>保存</button>
+		</footer>
+
+		<script>
+			const api = window.whatsthis;
+			if (!api) {
+				document.body.innerHTML =
+					'<p style="padding:24px;font:13px/1.6 -apple-system,sans-serif;color:#888">' +
+					"这个页面要在 What's This? 应用里打开（菜单栏图标 → 右键 → 设置）。<br>" +
+					"在浏览器里直接打开不会加载 preload 脚本，所以拿不到 API。</p>";
+				throw new Error("window.whatsthis 不存在：页面没有跑在 Electron 里");
+			}
+			const $apiKey = document.getElementById("apiKey");
+			const $model = document.getElementById("model");
+			const $fetch = document.getElementById("fetch");
+			const $save = document.getElementById("save");
+			const $cancel = document.getElementById("cancel");
+			const $status = document.getElementById("status");
+
+			function setStatus(text, kind) {
+				$status.textContent = text || "";
+				$status.className = kind || "";
+			}
+
+			function syncSaveButton() {
+				$save.disabled = !($apiKey.value.trim() && $model.value);
+			}
+
+			function fillModels(models, selected) {
+				$model.textContent = "";
+				for (const m of models) {
+					const opt = document.createElement("option");
+					opt.value = m.id;
+					opt.textContent = m.name;
+					if (m.id === selected) opt.selected = true;
+					$model.appendChild(opt);
+				}
+				$model.disabled = models.length === 0;
+			}
+
+			$fetch.addEventListener("click", async () => {
+				const apiKey = $apiKey.value.trim();
+				if (!apiKey) {
+					setStatus("请先填写 API Key", "error");
+					return;
+				}
+				$fetch.disabled = true;
+				setStatus("正在获取…");
+				try {
+					const res = await api.listModels(apiKey);
+					if (!res.ok) {
+						setStatus(res.error, "error");
+						return;
+					}
+					fillModels(res.value, $model.value);
+					setStatus(`已获取 ${res.value.length} 个模型，请选择一个`, "ok");
+				} catch (err) {
+					setStatus(err.message || String(err), "error");
+				} finally {
+					$fetch.disabled = false;
+					syncSaveButton();
+				}
+			});
+
+			$save.addEventListener("click", async () => {
+				$save.disabled = true;
+				try {
+					const res = await api.saveConfig({ apiKey: $apiKey.value.trim(), model: $model.value });
+					setStatus(res.ok ? "已保存 ✓" : res.error, res.ok ? "ok" : "error");
+				} catch (err) {
+					setStatus(err.message || String(err), "error");
+				} finally {
+					syncSaveButton();
+				}
+			});
+
+			$cancel.addEventListener("click", () => api.closeSettings());
+			$apiKey.addEventListener("input", syncSaveButton);
+			$model.addEventListener("change", syncSaveButton);
+			document.addEventListener("keydown", (e) => {
+				if (e.key === "Enter" && !$save.disabled) $save.click();
+			});
+
+			(async () => {
+				try {
+					const res = await api.loadConfig();
+					if (!res.ok) {
+						setStatus(res.error, "error");
+						return;
+					}
+					$apiKey.value = res.value.apiKey || "";
+					if (res.value.model) {
+						const opt = document.createElement("option");
+						opt.value = res.value.model;
+						opt.textContent = res.value.model;
+						opt.selected = true;
+						$model.appendChild(opt);
+						$model.disabled = false;
+					}
+					syncSaveButton();
+				} catch (err) {
+					setStatus(err.message || String(err), "error");
+				}
+			})();
+		</script>
+	</body>
+</html>
