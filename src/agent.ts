@@ -1,7 +1,6 @@
 import { Agent } from "@mariozechner/pi-agent-core";
 import { getModels, type ImageContent, type Model } from "@mariozechner/pi-ai";
-
-const BASE_URL = "https://api.deepseek.com";
+import { BASE_URL } from "./deepseek.js";
 
 const SYSTEM_PROMPT = [
 	"你是 macOS 菜单栏助手。用户会把选中的文字或剪切板里的内容（文字或图片）发给你，并问「这是什么？」。",

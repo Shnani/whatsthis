@@ -11,6 +11,7 @@
 		"start": "npm run build && electron .",
 		"app": "npm run build && open -a \"$PWD/node_modules/electron/dist/Electron.app\" --args \"$PWD\"",
 		"verify": "npm run build && electron test/verify.mjs",
+		"e2e": "npm run build && electron test/e2e.mjs",
 		"watch": "tsc --watch"
 	},
 	"dependencies": {

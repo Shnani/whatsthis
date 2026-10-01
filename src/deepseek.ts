@@ -1,4 +1,5 @@
-const BASE_URL = "https://api.deepseek.com";
+/** DeepSeek 官方 API 的入口，agent.ts 建 Model 时也要用。 */
+export const BASE_URL = "https://api.deepseek.com";
 
 export interface RemoteModel {
 	id: string;

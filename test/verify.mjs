@@ -1,34 +1,23 @@
 // 冒烟测试：npm run verify
-// 1) 用 Electron 44 的新异步 clipboard API 走一遍 src/main.ts 里的读取逻辑
+// 1) 驱动真实的 src/clipboard.ts，确认剪切板两条分支都对
 // 2) 驱动 panel.html，确认 preload 通道和 DOM 更新正常
 // 注意：会临时改写系统剪切板，结束时恢复原文字（原来的图片不会还原）。
 import { ClipboardItem, app, BrowserWindow, clipboard, ipcMain, nativeImage } from "electron";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readClipboard } from "../dist/clipboard.js";
+import { CH } from "../dist/contract.js";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const MAX_IMAGE_EDGE = 2048;
 const PNG_1PX =
 	"iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAFUlEQVR42mP8z8BQz0AEYBxVSF+FABJADveWkH6oAAAAAElFTkSuQmCC";
 
-/** 与 src/main.ts 的 readClipboard 保持一致 */
-async function readClipboard() {
-	const text = (await clipboard.readText()).trim();
-	for (const item of await clipboard.read()) {
-		const imageType = item.types.find((t) => t.startsWith("image/"));
-		if (!imageType) continue;
-		const blob = await item.getType(imageType);
-		let image = nativeImage.createFromBuffer(Buffer.from(await blob.arrayBuffer()));
-		if (image.isEmpty()) continue;
-		const { width, height } = image.getSize();
-		const longest = Math.max(width, height);
-		if (longest > MAX_IMAGE_EDGE) {
-			const scale = MAX_IMAGE_EDGE / longest;
-			image = image.resize({ width: Math.round(width * scale), height: Math.round(height * scale) });
-		}
-		return { kind: "image", size: image.getSize(), base64Len: image.toPNG().toString("base64").length };
-	}
-	return { kind: "text", text };
+/** 剪切板读回来的东西没法直接 JSON 化，挑几个能看懂的字段。 */
+function describe(clip) {
+	if (clip.kind === "text") return { kind: clip.kind, text: clip.text };
+	return { kind: clip.kind, mimeType: clip.image.mimeType, base64Len: clip.image.data.length, dataUrl: clip.dataUrl.slice(0, 22) };
 }
 
 async function main() {
@@ -38,12 +27,12 @@ async function main() {
 	try {
 		// --- 1. 文本分支 ---
 		await clipboard.writeText("hello from verify");
-		console.log("text   ->", JSON.stringify(await readClipboard()));
+		console.log("text   ->", JSON.stringify(describe(await readClipboard())));
 
 		// --- 2. 图片分支（新 API 写入一块 PNG） ---
 		const buf = nativeImage.createFromBuffer(Buffer.from(PNG_1PX, "base64")).toPNG();
 		await clipboard.write([new ClipboardItem({ "image/png": new Blob([buf], { type: "image/png" }) })]);
-		console.log("image  ->", JSON.stringify(await readClipboard()));
+		console.log("image  ->", JSON.stringify(describe(await readClipboard())));
 
 		// --- 3. 渲染进程 wiring ---
 		const win = new BrowserWindow({
@@ -76,47 +65,47 @@ async function main() {
 				"JSON.stringify({model:document.getElementById('model').textContent,source:document.getElementById('source').textContent,page:document.getElementById('page').textContent,prevOff:document.getElementById('prev').disabled,nextOff:document.getElementById('next').disabled,answer:document.getElementById('answer').textContent,bold:!!document.querySelector('#answer strong'),cursor:document.getElementById('answer').classList.contains('cursor'),isError:document.getElementById('answer').classList.contains('error'),img:document.querySelector('#preview img')?'ok':'missing'})",
 			);
 
-		win.webContents.send("panel:entry", entry({}));
-		win.webContents.send("panel:html", { id: 1, html: "<p>这是一张<strong>图片</strong>。</p>" });
+		win.webContents.send(CH.entry, entry({}));
+		win.webContents.send(CH.html, { id: 1, html: "<p>这是一张<strong>图片</strong>。</p>" });
 		await new Promise((r) => setTimeout(r, 300));
 		console.log("panel  ->", await shown());
 
 		// 翻页翻走后迟到的流式片段不能再改页面
-		win.webContents.send("panel:html", { id: 99, html: "<p>不该出现</p>" });
+		win.webContents.send(CH.html, { id: 99, html: "<p>不该出现</p>" });
 		await new Promise((r) => setTimeout(r, 150));
 		console.log("stale  ->", await api("document.getElementById('answer').textContent"));
 
 		// 收尾：光标停掉，翻页按钮按位置置灰（第 1 条 prev 灰、第 3 条 next 灰）
-		win.webContents.send("panel:entry", entry({ status: "done", index: 3, html: "<p>答完了</p>" }));
+		win.webContents.send(CH.entry, entry({ status: "done", index: 3, html: "<p>答完了</p>" }));
 		await new Promise((r) => setTimeout(r, 200));
 		console.log("done   ->", await shown());
 
 		// --- 4. 错误分支 ---
-		win.webContents.send("panel:entry", entry({ status: "done", error: "boom", html: "" }));
+		win.webContents.send(CH.entry, entry({ status: "done", error: "boom", html: "" }));
 		await new Promise((r) => setTimeout(r, 200));
 		console.log("error  ->", await shown());
 
 		// --- 4b. 一次性提示（不进历史） ---
-		win.webContents.send("panel:notice", "没有选中的文字，剪切板也是空的");
+		win.webContents.send(CH.notice, "没有选中的文字，剪切板也是空的");
 		await new Promise((r) => setTimeout(r, 200));
 		console.log("notice ->", await shown());
 
 		// --- 4d. 卡片操作：删除 / 复制按钮 ---
 		let deleted = 0;
 		let copied = 0;
-		ipcMain.on("panel:delete", () => {
+		ipcMain.on(CH.remove, () => {
 			deleted += 1;
 		});
-		ipcMain.on("panel:copy", () => {
+		ipcMain.on(CH.copy, () => {
 			copied += 1;
 		});
-		win.webContents.send("panel:entry", entry({ id: 11, index: 1, total: 1, kind: "text", text: "T", html: "<p>卡片</p>", status: "done" }));
+		win.webContents.send(CH.entry, entry({ id: 11, index: 1, total: 1, kind: "text", text: "T", html: "<p>卡片</p>", status: "done" }));
 		await new Promise((r) => setTimeout(r, 150));
 		const enabledWithCard = await api("!document.getElementById('remove').disabled && !document.getElementById('copy').disabled");
 		await api("document.getElementById('remove').click(); document.getElementById('copy').click();");
 		await new Promise((r) => setTimeout(r, 150));
 		const showsCheck = await api("getComputedStyle(document.querySelector('#copy .ok')).display !== 'none' && getComputedStyle(document.querySelector('#copy .icon')).display === 'none'");
-		win.webContents.send("panel:entry", null);
+		win.webContents.send(CH.entry, null);
 		await new Promise((r) => setTimeout(r, 250));
 		console.log(
 			"delete ->",
@@ -132,7 +121,7 @@ async function main() {
 
 		// --- 4e. 待发送的卡片：内容框自己就是发送按钮，点了才发出去 ---
 		let sent = 0;
-		ipcMain.on("panel:send", () => {
+		ipcMain.on(CH.send, () => {
 			sent += 1;
 		});
 		const previewState = () =>
@@ -140,14 +129,14 @@ async function main() {
 				"JSON.stringify({提示可见:getComputedStyle(document.querySelector('#preview .send')).display!=='none',可点:!document.getElementById('preview').disabled,指针:getComputedStyle(document.getElementById('preview')).cursor,思考中:!!getComputedStyle(document.getElementById('answer'),'::after').content.includes('思考')})",
 			);
 
-		win.webContents.send("panel:entry", entry({ id: 21, index: 1, total: 1, kind: "text", text: "T", status: "pending", html: "" }));
+		win.webContents.send(CH.entry, entry({ id: 21, index: 1, total: 1, kind: "text", text: "T", status: "pending", html: "" }));
 		await new Promise((r) => setTimeout(r, 150));
 		const pending = await previewState();
 		await api("document.getElementById('preview').click()");
 		await new Promise((r) => setTimeout(r, 150));
 
 		// 已经答过的卡片不能再点，免得重复发
-		win.webContents.send("panel:entry", entry({ id: 21, index: 1, total: 1, kind: "text", text: "T", status: "done", html: "<p>答完了</p>" }));
+		win.webContents.send(CH.entry, entry({ id: 21, index: 1, total: 1, kind: "text", text: "T", status: "done", html: "<p>答完了</p>" }));
 		await new Promise((r) => setTimeout(r, 150));
 		await api("document.getElementById('preview').click()");
 		await new Promise((r) => setTimeout(r, 150));
@@ -162,7 +151,7 @@ async function main() {
 
 		// --- 4c. 滚动：换一条记录回到顶部，同一条重发（收尾）别把读完滚到底的页面拽回去 ---
 		const long = `<p>${"很长的一段答案。".repeat(200)}</p>`;
-		const post = (id) => win.webContents.send("panel:entry", entry({ id, index: id, total: 2, kind: "text", text: "T", html: long, status: "done" }));
+		const post = (id) => win.webContents.send(CH.entry, entry({ id, index: id, total: 2, kind: "text", text: "T", html: long, status: "done" }));
 		post(7);
 		await new Promise((r) => setTimeout(r, 150));
 		await api("document.querySelector('main').scrollTop = document.querySelector('main').scrollHeight");
@@ -176,15 +165,15 @@ async function main() {
 		console.log("savedImage items:", (await savedImage).length);
 
 		// --- 5. settings.html（用桩 handler 验证 IPC 往返与 ok/error 分支） ---
-		ipcMain.handle("config:load", () => ({ ok: true, value: { apiKey: "", model: "" } }));
-		ipcMain.handle("models:list", () => ({
+		ipcMain.handle(CH.configLoad, () => ({ ok: true, value: { apiKey: "", model: "" } }));
+		ipcMain.handle(CH.modelsList, () => ({
 			ok: true,
 			value: [
 				{ id: "deepseek-v4-flash", name: "deepseek-v4-flash" },
 				{ id: "deepseek-v4-pro", name: "deepseek-v4-pro" },
 			],
 		}));
-		ipcMain.handle("config:save", () => ({ ok: true, value: { apiKey: "sk-test", model: "deepseek-v4-pro" } }));
+		ipcMain.handle(CH.configSave, () => ({ ok: true, value: { apiKey: "sk-test", model: "deepseek-v4-pro" } }));
 
 		const sw = new BrowserWindow({
 			show: false,
@@ -296,6 +285,23 @@ async function main() {
 				dangerousLinkStripped: !md.includes("javascript:"),
 			}),
 		);
+
+		// --- 9. 配置合并：设置窗口只改 apiKey/model，别把 accessibilityPrompted 抹掉 ---
+		// 换个 HOME 再加载 config.js，免得动到用户真实的 ~/.whatsthis/config.json
+		const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "whatsthis-verify-"));
+		process.env.HOME = tmpHome;
+		const { loadConfig, mergeConfig, saveConfig } = await import("../dist/config.js");
+		saveConfig({ apiKey: "sk-a", model: "m1", accessibilityPrompted: true });
+		mergeConfig({ apiKey: "sk-b", model: "m2" });
+		const merged = loadConfig();
+		console.log(
+			"config ->",
+			JSON.stringify({
+				改到了: merged.apiKey === "sk-b" && merged.model === "m2",
+				授权标记保住: merged.accessibilityPrompted === true,
+			}),
+		);
+		fs.rmSync(tmpHome, { recursive: true, force: true });
 	} catch (err) {
 		console.error("FAILED:", err);
 	} finally {

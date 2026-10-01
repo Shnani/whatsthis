@@ -48,11 +48,6 @@ try {
 	loadError = (err as Error).message;
 }
 
-/** 原生扩展是否可用。不可用时读选区功能整体失效，调用方应回退到剪切板。 */
-export function isSelectionAvailable(): boolean {
-	return addon !== null;
-}
-
 /** AXError 取值见 SDK 的 AXError.h；别凭记忆写，-25204 和 -25211 很容易搞混。 */
 const AX_ERRORS: Record<number, string> = {
 	[-1]: "未执行（上游步骤已失败）",
@@ -111,11 +106,6 @@ export function inspectSelection(): SelectionReading {
 	} catch (err) {
 		return { text: "", report: `原生扩展调用失败：${(err as Error).message}` };
 	}
-}
-
-/** 选中的文字。读不到时返回空串，调用方回退到剪切板。 */
-export function readSelectedText(): string {
-	return inspectSelection().text;
 }
 
 /** 给设置菜单用的诊断信息。 */

@@ -43,3 +43,25 @@ export function saveConfig(config: Config): void {
 		throw new Error(`保存配置失败（${FILE}）：${(err as Error).message}`);
 	}
 }
+
+/** 设置窗口能改的字段。其余字段不归它管，别让它覆盖掉。 */
+export type ConfigPatch = Pick<Config, "apiKey" | "model">;
+
+/**
+ * 保存设置窗口改的那两项，其余字段从旧配置带过来。
+ *
+ * 早先是把渲染进程发来的对象直接落盘，结果 accessibilityPrompted 每次保存都被抹掉，
+ * 下次启动又弹一次辅助功能授权。
+ */
+export function mergeConfig(patch: ConfigPatch): Config {
+	let base: Config;
+	try {
+		base = loadConfig();
+	} catch {
+		// 配置文件读不出来（坏了）：这次保存就当成从头写一份，别让用户卡在「存不下去」
+		base = { ...EMPTY };
+	}
+	const next = { ...base, ...patch };
+	saveConfig(next);
+	return next;
+}

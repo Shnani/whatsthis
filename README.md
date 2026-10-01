@@ -144,18 +144,31 @@ AX 焦点应用：pid=… Xxx       ← AX 认为谁有键盘焦点
 
 | 文件 | 作用 |
 | --- | --- |
-| [src/main.ts](src/main.ts) | Electron 主进程：Tray、浮窗、设置窗口、取材顺序、IPC |
+| [src/main.ts](src/main.ts) | Electron 主进程入口：托盘、右键菜单、取材→摆卡片的编排、日志 |
+| [src/contract.ts](src/contract.ts) | IPC 契约：channel 名字与消息类型（**不许 import electron**，preload 要引） |
+| [src/ipc.ts](src/ipc.ts) | ipcMain 注册。碰应用状态的动作由 main 注入，纯转发的就地实现 |
+| [src/panel.ts](src/panel.ts) | 结果浮窗：创建、贴到图标下方、显隐、往页面推消息 |
+| [src/settings.ts](src/settings.ts) | 设置窗口 |
+| [src/input.ts](src/input.ts) | 取材优先级：浮窗选区 → 鼠标选区 → 剪切板图片 → 剪切板文字 |
+| [src/clipboard.ts](src/clipboard.ts) | 剪切板读取与图片缩放（`readClipboard` 的唯一实现） |
+| [src/ask.ts](src/ask.ts) | 跑一轮问答：流式片段的节流渲染，落进 history 的某条记录 |
 | [src/history.ts](src/history.ts) | 问答记忆：去重、翻页、追问上下文（纯函数，无 IO） |
 | [src/markdown.ts](src/markdown.ts) | Markdown → HTML（marked），含转义与链接过滤 |
 | [native/ax.m](native/ax.m) | N-API 原生扩展：进程内调 Accessibility API 读选中文字 |
 | [src/selection.ts](src/selection.ts) | 加载原生扩展，把结果整理成人话报告 |
 | [src/agent.ts](src/agent.ts) | 封装 pi-agent-core，把内容交给模型 |
-| [src/deepseek.ts](src/deepseek.ts) | 拉取 DeepSeek 官方模型列表 |
-| [src/config.ts](src/config.ts) | 配置读写（失败必抛异常） |
+| [src/deepseek.ts](src/deepseek.ts) | DeepSeek API 入口（BASE_URL）与官方模型列表 |
+| [src/config.ts](src/config.ts) | 配置读写（失败必抛异常）+ 设置窗口那两项的合并保存 |
 | [src/preload.mts](src/preload.mts) | contextBridge，暴露给两个页面 |
 | [src/panel.html](src/panel.html) | 结果浮窗（流式输出） |
 | [src/settings.html](src/settings.html) | 设置窗口 |
 | [test/verify.mjs](test/verify.mjs) | 冒烟测试：剪切板、选区、记忆去重/翻页、两个页面的 wiring |
+| [test/e2e.mjs](test/e2e.mjs) | 端到端：真起应用、真开浮窗、真调模型，走完整链路 |
+
+分工的取舍：**按真实存在的接缝切，不按分层。** 契约（`contract.ts`）必须是纯的，
+因为它同时被主进程和 preload 引用；窗口、取材、提问编排各自独立，因为它们的变化节奏不同。
+`agent.ts` / `markdown.ts` / `history.ts` 本来就是单一职责，不动。
+
 
 ## 开发
 
@@ -166,7 +179,27 @@ npm run build:native  # 只编译原生扩展
 npm run app           # 构建 + 脱离终端启动（日常用这个）
 npm start             # 构建 + 终端前台启动（要看 stdout 时用）
 npm run verify        # 冒烟测试（会临时改写系统剪切板，跑完恢复原文字）
+npm run e2e           # 端到端：真启动应用，真开浮窗，真调模型
 ```
+
+### 两层测试的分工
+
+| | 干什么 | 碰网络吗 |
+| --- | --- | --- |
+| [test/verify.mjs](test/verify.mjs) | 给各模块喂假数据，验逻辑本身（历史去重/翻页、Markdown 转义、配置合并…） | 否 |
+| [test/e2e.mjs](test/e2e.mjs) | 真 `import` main.ts 起应用，点图标的动作 → 浮窗真渲染 → 真发给模型 → 流式 → 追问 → 删除复制 → 设置窗口保存 | **是** |
+
+`e2e` 会做两件要知道的事：用你 `~/.whatsthis/config.json` 里的 Key 发两三次很短的请求；
+临时改写 `config.json` 来测「保存」按钮（开头备份，结束原样写回）。
+两个脚本都会备份并还原剪切板**文字**，但还原不了原来的**图片**。
+
+`e2e` 覆盖不到的：菜单栏图标的**物理点击**和右键菜单（需要真鼠标），
+以及从别的应用读鼠标选区（需要先进另一个应用选中文字）。
+它驱动的是这些 UI 背后的同一个函数（`onTrayClick`）。
+
+> `test/e2e.mjs` 里有一行 `app.getAppPath = () => 项目根`：`electron` 直接跑单个脚本时
+> `app.getAppPath()` 会指向脚本所在目录（`test/`），而应用代码用它定位 `dist/preload.mjs`
+> 和 `src/*.html`。正常启动（`npm run app`）没这个问题，是测试的调用方式特殊，所以在测试里掰回来。
 
 改 `src/*.html` 不需要编译，重启生效。
 
