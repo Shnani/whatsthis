@@ -4,7 +4,8 @@ import { getModels, type ImageContent, type Model } from "@mariozechner/pi-ai";
 const BASE_URL = "https://api.deepseek.com";
 
 const SYSTEM_PROMPT = [
-	"你是 macOS 菜单栏助手。用户会把剪切板里的内容（文字或图片）发给你，并问「这是什么？」。",
+	"你是 macOS 菜单栏助手。用户会把选中的文字或剪切板里的内容（文字或图片）发给你，并问「这是什么？」。",
+	"用户还会在你上一轮的回答里选一句话继续追问，这时直接回答那句追问，不要重头解释原文。",
 	"用中文直接回答它是什么，不要寒暄、不要复述问题。",
 	"图片：说明主体、场景、以及图中可读的关键文字。",
 	"代码或报错：说明语言/技术栈、用途、以及关键问题在哪。",
@@ -33,13 +34,17 @@ export function resolveModel(id: string): Model<any> {
 	return { ...base, id, input: ["text", "image"] };
 }
 
+/** 用户自己关掉浮窗导致的中断。调用方靠它区分「取消」和真的出错。 */
+export const CANCELLED = "已取消";
+
 export interface AskOptions {
 	apiKey: string;
 	model: string;
+	/** 这一问（首次是「这是什么？」加原文，追问是用户选中那句话） */
 	question: string;
-	/** 剪切板文字；与 image 二选一 */
-	text?: string;
-	/** 剪切板图片；与 text 二选一 */
+	/** 追问时带上同一会话的前几轮问答，否则模型不知道「这」指的是什么 */
+	context?: string;
+	/** 剪切板图片 */
 	image?: ImageContent;
 	onDelta: (delta: string) => void;
 }
@@ -47,6 +52,12 @@ export interface AskOptions {
 export interface AskRun {
 	done: Promise<void>;
 	abort: () => void;
+}
+
+/** 拼出真正发给模型的那段话。 */
+function buildInput(opts: AskOptions): string {
+	if (opts.context) return `之前聊过：\n${opts.context}\n\n用户追问：${opts.question}`;
+	return opts.question;
 }
 
 /** 起一个一次性的 agent 跑完整轮问答。失败通过 done 的 rejection 抛出。 */
@@ -69,15 +80,14 @@ export function ask(opts: AskOptions): AskRun {
 		if (event.type === "message_end" && event.message.role === "assistant") {
 			const { stopReason, errorMessage } = event.message;
 			if (stopReason === "error") failure = errorMessage || "模型调用失败";
-			else if (stopReason === "aborted") failure = "已取消";
+			else if (stopReason === "aborted") failure = CANCELLED;
 		}
 	});
 
-	const input = opts.text ? `${opts.question}\n\n${opts.text}` : opts.question;
 	const images: ImageContent[] = opts.image ? [opts.image] : [];
 
 	const done = (async () => {
-		await agent.prompt(input, images);
+		await agent.prompt(buildInput(opts), images);
 		if (failure) throw new Error(failure);
 	})();
 

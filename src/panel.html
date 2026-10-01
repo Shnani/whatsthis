@@ -56,13 +56,16 @@
 			header {
 				display: flex;
 				align-items: center;
-				gap: 8px;
-				padding: 10px 12px;
+				gap: 4px;
+				padding: 10px 10px;
 				border-bottom: 1px solid var(--line);
 				flex: none;
 			}
 			header .title {
 				font-weight: 600;
+				/* 按钮多了以后这里最容易被挤到换行，钉死不让它换 */
+				flex: none;
+				white-space: nowrap;
 			}
 			header .source,
 			header .model {
@@ -71,29 +74,74 @@
 				border: 1px solid var(--line);
 				border-radius: 5px;
 				padding: 1px 6px;
-				max-width: 190px;
+				/* min-width 不归零的话，flex 不会让它们缩到内容宽度以下，窄了就把标题挤出去 */
+				min-width: 0;
+				max-width: 110px;
 				overflow: hidden;
 				text-overflow: ellipsis;
 				white-space: nowrap;
 			}
-			header .source:empty {
+			/* 标签短又有用，不给它缩；位置不够时先截模型名 */
+			header .source {
+				flex: none;
+			}
+			header .source:empty,
+			header .model:empty {
 				display: none;
 			}
 			header .spacer {
 				flex: 1;
 			}
+			/* 把「对卡片的操作」和「信息」「翻页」分开，免得图标挤成一团分不清 */
+			header .sep {
+				width: 1px;
+				height: 14px;
+				background: var(--line);
+			}
+			header button svg {
+				display: block;
+				width: 13px;
+				height: 13px;
+			}
+			/* 复制成功后把图标换成对勾，见 script 里的 copied */
+			header button .ok,
+			header button.copied .icon {
+				display: none;
+			}
+			header button.copied .ok {
+				display: block;
+			}
+			header button.copied {
+				color: var(--accent);
+			}
+			header .page {
+				font-size: 11px;
+				color: var(--muted);
+				font-variant-numeric: tabular-nums;
+			}
+			header .page:empty {
+				display: none;
+			}
 			header button {
 				all: unset;
 				cursor: pointer;
 				color: var(--muted);
-				font-size: 15px;
+				font-size: 14px;
 				line-height: 1;
-				padding: 3px 5px;
+				padding: 2px 3px;
 				border-radius: 5px;
 			}
 			header button:hover {
 				color: var(--fg);
 				background: var(--line);
+			}
+			header button:disabled {
+				opacity: 0.3;
+				cursor: default;
+			}
+			header button:disabled:hover {
+				color: var(--muted);
+				background: none;
 			}
 			main {
 				flex: 1;
@@ -103,43 +151,70 @@
 				padding: 12px;
 				overflow-y: auto;
 			}
+			/* 内容框本身就是「发送」按钮：点菜单栏图标只把内容摆出来，点它才发给模型 */
 			.preview {
 				flex: none;
+				display: flex;
+				flex-direction: column;
+				gap: 8px;
+				width: 100%;
+				margin: 0;
+				background: none;
 				border: 1px solid var(--line);
 				border-radius: 8px;
 				padding: 8px 10px;
 				color: var(--muted);
-				font-size: 12px;
-				max-height: 96px;
+				font: inherit;
+				text-align: left;
+				max-height: 140px;
 				overflow: hidden;
+			}
+			.preview-body {
+				font-size: 12px;
 				white-space: pre-wrap;
 				word-break: break-word;
 			}
-			.preview.image {
-				padding: 0;
-				border: none;
-				max-height: 120px;
+			.preview.image .preview-body {
 				display: flex;
 				justify-content: center;
 			}
-			.preview.image img {
+			.preview.image .preview-body img {
 				max-width: 100%;
-				max-height: 120px;
+				max-height: 110px;
 				border-radius: 8px;
 				border: 1px solid var(--line);
 				object-fit: contain;
+			}
+			.preview .send {
+				display: none;
+			}
+			/* 待发送：整块可点，给足提示 */
+			.preview.pending {
+				cursor: pointer;
+				border-color: var(--accent);
+			}
+			.preview.pending:hover {
+				background: var(--code-bg);
+			}
+			.preview.pending .send {
+				display: block;
+				font-size: 11px;
+				color: var(--accent);
 			}
 			#answer {
 				flex: 1;
 				word-break: break-word;
 			}
-			#answer:empty::after {
+			/* 「思考中…」只在真的在生成时显示；待发送的卡片下面留空 */
+			#answer.cursor:empty::after {
 				content: "思考中…";
 				color: var(--muted);
-			}
-			#answer.error {
+			}			#answer.error {
 				color: var(--danger);
 				white-space: pre-wrap;
+			}
+			#answer.empty {
+				color: var(--muted);
 			}
 
 			/* Markdown 渲染出来的元素 */
@@ -247,10 +322,34 @@
 				<span class="source" id="source"></span>
 				<span class="model" id="model"></span>
 				<span class="spacer"></span>
+				<span class="sep"></span>
+				<button id="remove" title="删除这条">
+					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M3 6h18" />
+						<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+						<path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+					</svg>
+				</button>
+				<button id="copy" title="复制问题与回答全文">
+					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+						<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+					</svg>
+					<svg class="ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M20 6 9 17l-5-5" />
+					</svg>
+				</button>
+				<span class="sep"></span>
+				<button id="prev" title="上一条">‹</button>
+				<span class="page" id="page"></span>
+				<button id="next" title="下一条">›</button>
 				<button id="close" title="关闭（Esc）">✕</button>
 			</header>
 			<main>
-				<div class="preview" id="preview" hidden></div>
+				<button class="preview" id="preview" hidden>
+					<span class="preview-body" id="previewBody"></span>
+					<span class="send">点这里发送给 AI</span>
+				</button>
 				<div id="answer"></div>
 			</main>
 		</div>
@@ -263,51 +362,123 @@
 			}
 			const $model = document.getElementById("model");
 			const $source = document.getElementById("source");
+			const $page = document.getElementById("page");
 			const $preview = document.getElementById("preview");
+			const $previewBody = document.getElementById("previewBody");
 			const $answer = document.getElementById("answer");
 			const $main = document.querySelector("main");
+			const $prev = document.getElementById("prev");
+			const $next = document.getElementById("next");
+			const $remove = document.getElementById("remove");
+			const $copy = document.getElementById("copy");
 			const $close = document.getElementById("close");
 
 			const SOURCE_LABEL = {
 				selection: "选中文字",
+				followup: "追问",
 				text: "剪切板文字",
 				image: "剪切板图片",
 			};
 
+			/** 当前显示的是哪条记录，流式片段靠它对号入座 */
+			let shownId = 0;
+
 			$close.addEventListener("click", () => api.closePanel());
+			$prev.addEventListener("click", () => api.page(-1));
+			$next.addEventListener("click", () => api.page(1));
+			$remove.addEventListener("click", () => api.remove());
+			$preview.addEventListener("click", () => api.send());
+			$copy.addEventListener("click", () => {
+				api.copy();
+				// 复制没有可见结果，把图标换成对勾给个回执
+				$copy.classList.add("copied");
+				setTimeout(() => $copy.classList.remove("copied"), 1200);
+			});
 			document.addEventListener("keydown", (e) => {
 				if (e.key === "Escape") api.closePanel();
 			});
 
-			api.onStart((payload) => {
-				$model.textContent = payload.model || "";
-				$source.textContent = SOURCE_LABEL[payload.kind] || "";
-				$answer.textContent = "";
-				$answer.classList.remove("error");
-				$answer.classList.add("cursor");
+			/** 没有卡片可显示：清掉标题栏，三个操作按钮都置灰。 */
+			function clearHeader() {
+				shownId = 0;
+				$model.textContent = "";
+				$source.textContent = "";
+				$page.textContent = "";
+				$prev.disabled = true;
+				$next.disabled = true;
+				$remove.disabled = true;
+				$copy.disabled = true;
+			}
 
-				$preview.hidden = true;
+			/** 没卡片时给一句话顶上。 */
+			function showMessage(text, isError) {
+				clearHeader();
+				// 只清内容，别把按钮自己的 .preview-body / .send 也一起清掉
 				$preview.className = "preview";
-				$preview.textContent = "";
+				$previewBody.replaceChildren();
+				$preview.disabled = true;
+				$preview.hidden = true;
+				$answer.classList.remove("cursor");
+				$answer.classList.toggle("error", isError);
+				$answer.classList.toggle("empty", !isError);
+				$answer.textContent = text;
+			}
 
-				if (payload.kind === "image" && payload.dataUrl) {
+			/** 整条切换：新的提问、翻页、删除后的补位、收尾都是走这里。 */
+			api.onEntry((entry) => {
+				if (!entry) {
+					showMessage("没有记录了，点菜单栏图标再问一次。", false);
+					return;
+				}
+				// 收尾时主进程会把同一条重发一次，那次别把读完滚到底的页面拽回顶部
+				const sameEntry = entry.id === shownId;
+				shownId = entry.id;
+				$model.textContent = entry.model || "";
+				$source.textContent = SOURCE_LABEL[entry.kind] || "";
+				$page.textContent = entry.total > 1 ? `${entry.index}/${entry.total}` : "";
+				$prev.disabled = entry.index <= 1;
+				$next.disabled = entry.index >= entry.total;
+				$remove.disabled = false;
+				$copy.disabled = false;
+
+				// 待发送的卡片整块可点，点了才真的发给模型
+				const canSend = entry.status === "pending";
+				$preview.className = "preview";
+				$previewBody.replaceChildren();
+				$preview.hidden = true;
+				if (entry.kind === "image" && entry.dataUrl) {
 					const img = document.createElement("img");
-					img.src = payload.dataUrl;
-					$preview.classList.add("image");
-					$preview.appendChild(img);
+					img.src = entry.dataUrl;
+					$previewBody.appendChild(img);
+					$preview.className = "preview image";
 					$preview.hidden = false;
-				} else if (payload.text) {
-					$preview.textContent = payload.text;
+				} else if (entry.text) {
+					$previewBody.textContent = entry.text;
 					$preview.hidden = false;
 				}
+				$preview.classList.toggle("pending", canSend);
+				$preview.disabled = !canSend;
+
+				$answer.classList.remove("empty");
+				$answer.classList.toggle("error", Boolean(entry.error));
+				$answer.classList.toggle("cursor", entry.status === "running");
+				$answer.innerHTML = entry.error ? "" : entry.html;
+				if (entry.error) $answer.textContent = entry.error;
+				if (!sameEntry) $main.scrollTop = 0;
 			});
 
 			// 主进程已经把 Markdown 渲染成 HTML 了（顺带做了转义和链接过滤）
-			api.onHtml((html) => {
+			api.onHtml((chunk) => {
+				if (chunk.id !== shownId) return; // 翻页翻走了，别动页面
 				// 用户往上翻看历史时别把他拽回底部
 				const stick = $main.scrollTop + $main.clientHeight >= $main.scrollHeight - 32;
-				$answer.innerHTML = html;
+				$answer.innerHTML = chunk.html;
 				if (stick) $main.scrollTop = $main.scrollHeight;
+			});
+
+			/** 没东西可问之类的一次性提示，不进历史，也不影响翻页。 */
+			api.onNotice((message) => {
+				showMessage(message, true);
 			});
 
 			// 链接一律交给系统浏览器，绝不让浮窗自己被导航走
@@ -316,17 +487,6 @@
 				if (!link) return;
 				event.preventDefault();
 				api.openExternal(link.getAttribute("href"));
-			});
-
-			api.onDone(() => {
-				$answer.classList.remove("cursor");
-				$main.scrollTop = $main.scrollHeight;
-			});
-
-			api.onError((message) => {
-				$answer.classList.remove("cursor");
-				$answer.classList.add("error");
-				$answer.textContent = message;
 			});
 		</script>
 	</body>

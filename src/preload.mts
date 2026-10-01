@@ -1,11 +1,10 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { EntryView } from "./history.js";
 
-/** 结果浮窗收到的一次提问请求。 */
-export interface AnswerStart {
-	kind: "selection" | "text" | "image" | "empty";
-	model: string;
-	text?: string;
-	dataUrl?: string;
+/** 流式输出期间推进来的片段，只更新对应那条记录。 */
+export interface AnswerChunk {
+	id: number;
+	html: string;
 }
 
 function on<T>(channel: string, cb: (payload: T) => void): () => void {
@@ -15,12 +14,16 @@ function on<T>(channel: string, cb: (payload: T) => void): () => void {
 }
 
 contextBridge.exposeInMainWorld("whatsthis", {
-	// 结果浮窗
-	onStart: (cb: (payload: AnswerStart) => void) => on("answer:start", cb),
-	onHtml: (cb: (html: string) => void) => on("answer:html", cb),
-	onDone: (cb: () => void) => on("answer:done", cb),
-	onError: (cb: (message: string) => void) => on("answer:error", cb),
-	cancel: () => ipcRenderer.send("answer:cancel"),
+	// 结果浮窗。entry 为 null 表示一条记录都没有了（空状态）
+	onEntry: (cb: (entry: EntryView | null) => void) => on("panel:entry", cb),
+	onHtml: (cb: (chunk: AnswerChunk) => void) => on("panel:html", cb),
+	onNotice: (cb: (message: string) => void) => on("panel:notice", cb),
+	page: (delta: number) => ipcRenderer.send("panel:page", delta),
+	remove: () => ipcRenderer.send("panel:delete"),
+	copy: () => ipcRenderer.send("panel:copy"),
+	// 点内容框：把这一条发给模型。在此之前内容只在本机
+	send: () => ipcRenderer.send("panel:send"),
+	cancel: () => ipcRenderer.send("panel:cancel"),
 	closePanel: () => ipcRenderer.send("panel:close"),
 	openExternal: (url: string) => ipcRenderer.send("open-external", url),
 
