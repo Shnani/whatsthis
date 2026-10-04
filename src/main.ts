@@ -212,7 +212,6 @@ registerIpc({
 		const entry = history.entries[history.index];
 		if (entry) clipboard.writeText(copyTextOf(entry));
 	},
-	cancel: abortCurrent,
 	close: () => panel.hide(),
 	closeSettings,
 });

@@ -21,7 +21,6 @@ export interface IpcActions {
 	send(): void;
 	remove(): void;
 	copy(): void;
-	cancel(): void;
 	close(): void;
 	closeSettings(): void;
 }
@@ -42,7 +41,6 @@ export function registerIpc(actions: IpcActions): void {
 	ipcMain.on(CH.send, () => actions.send());
 	ipcMain.on(CH.remove, () => actions.remove());
 	ipcMain.on(CH.copy, () => actions.copy());
-	ipcMain.on(CH.cancel, () => actions.cancel());
 	ipcMain.on(CH.close, () => actions.close());
 	ipcMain.on(CH.settingsClose, () => actions.closeSettings());
 	ipcMain.on(CH.openExternal, (_event, url: string) => {

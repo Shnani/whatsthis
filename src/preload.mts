@@ -19,7 +19,6 @@ contextBridge.exposeInMainWorld("whatsthis", {
 	copy: () => ipcRenderer.send(CH.copy),
 	// 点内容框：把这一条发给模型。在此之前内容只在本机
 	send: () => ipcRenderer.send(CH.send),
-	cancel: () => ipcRenderer.send(CH.cancel),
 	closePanel: () => ipcRenderer.send(CH.close),
 	openExternal: (url: string) => ipcRenderer.send(CH.openExternal, url),
 

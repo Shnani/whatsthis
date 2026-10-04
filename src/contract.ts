@@ -16,7 +16,6 @@ export const CH = {
 	send: "panel:send",
 	remove: "panel:delete",
 	copy: "panel:copy",
-	cancel: "panel:cancel",
 	close: "panel:close",
 	// 设置窗口
 	configLoad: "config:load",
