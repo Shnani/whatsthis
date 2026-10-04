@@ -286,19 +286,25 @@ async function main() {
 			}),
 		);
 
-		// --- 9. 配置合并：设置窗口只改 apiKey/model，别把 accessibilityPrompted 抹掉 ---
+		// --- 9. 配置：合并保存不抹掉别的字段；开机自启默认开 ---
 		// 换个 HOME 再加载 config.js，免得动到用户真实的 ~/.whatsthis/config.json
 		const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "whatsthis-verify-"));
 		process.env.HOME = tmpHome;
 		const { loadConfig, mergeConfig, saveConfig } = await import("../dist/config.js");
+
+		// 模拟一份老配置文件：里面还没有 launchAtLogin 这个字段
 		saveConfig({ apiKey: "sk-a", model: "m1", accessibilityPrompted: true });
-		mergeConfig({ apiKey: "sk-b", model: "m2" });
+		const legacy = loadConfig();
+
+		mergeConfig({ apiKey: "sk-b", model: "m2", launchAtLogin: false });
 		const merged = loadConfig();
 		console.log(
 			"config ->",
 			JSON.stringify({
 				改到了: merged.apiKey === "sk-b" && merged.model === "m2",
 				授权标记保住: merged.accessibilityPrompted === true,
+				老配置里开机自启默认开: legacy.launchAtLogin === true,
+				显式关掉能存住: merged.launchAtLogin === false,
 			}),
 		);
 		fs.rmSync(tmpHome, { recursive: true, force: true });

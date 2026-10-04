@@ -56,7 +56,7 @@
 				gap: 8px;
 				margin-bottom: 16px;
 			}
-			input,
+			input:not([type="checkbox"]),
 			select {
 				flex: 1;
 				min-width: 0;
@@ -68,9 +68,26 @@
 				padding: 7px 9px;
 				outline: none;
 			}
-			input:focus,
+			input:not([type="checkbox"]):focus,
 			select:focus {
 				border-color: var(--accent);
+			}
+			/* 开关行：跟上面的输入框行区分开，别继承 label 的块级样式 */
+			label.check {
+				display: flex;
+				align-items: center;
+				gap: 7px;
+				margin: 0 0 16px;
+				color: var(--fg);
+				font-size: 13px;
+				cursor: pointer;
+			}
+			label.check input {
+				flex: none;
+				width: 14px;
+				height: 14px;
+				margin: 0;
+				accent-color: var(--accent);
 			}
 			button {
 				font: inherit;
@@ -134,6 +151,12 @@
 			</select>
 		</div>
 
+		<label class="check">
+			<input id="launchAtLogin" type="checkbox" />
+			<span>开机自动启动</span>
+		</label>
+		<p class="hint" id="launchHint" hidden></p>
+
 		<footer>
 			<span id="status"></span>
 			<button id="cancel">关闭</button>
@@ -155,6 +178,8 @@
 			const $save = document.getElementById("save");
 			const $cancel = document.getElementById("cancel");
 			const $status = document.getElementById("status");
+			const $launch = document.getElementById("launchAtLogin");
+			const $launchHint = document.getElementById("launchHint");
 
 			function setStatus(text, kind) {
 				$status.textContent = text || "";
@@ -204,7 +229,11 @@
 			$save.addEventListener("click", async () => {
 				$save.disabled = true;
 				try {
-					const res = await api.saveConfig({ apiKey: $apiKey.value.trim(), model: $model.value });
+					const res = await api.saveConfig({
+						apiKey: $apiKey.value.trim(),
+						model: $model.value,
+						launchAtLogin: $launch.checked,
+					});
 					setStatus(res.ok ? "已保存 ✓" : res.error, res.ok ? "ok" : "error");
 				} catch (err) {
 					setStatus(err.message || String(err), "error");
@@ -228,6 +257,13 @@
 						return;
 					}
 					$apiKey.value = res.value.apiKey || "";
+					$launch.checked = res.value.launchAtLogin !== false;
+					if (!res.value.canLaunchAtLogin) {
+						// 开发模式：注册登录项拉起来的是空白 Electron，所以这时不注册
+						$launchHint.textContent =
+							"开发模式下不生效：这时跑的是 node_modules 里的 Electron，注册成登录项后开机拉起来是个空白窗口。打包成 .app 后才真正生效。";
+						$launchHint.hidden = false;
+					}
 					if (res.value.model) {
 						const opt = document.createElement("option");
 						opt.value = res.value.model;

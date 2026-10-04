@@ -7,11 +7,13 @@ export interface Config {
 	model: string;
 	/** 是否已经主动请求过一次「辅助功能」权限，避免每次启动都弹窗 */
 	accessibilityPrompted: boolean;
+	/** 登录时自动启动。默认开 */
+	launchAtLogin: boolean;
 }
 
 const DIR = path.join(os.homedir(), ".whatsthis");
 const FILE = path.join(DIR, "config.json");
-const EMPTY: Config = { apiKey: "", model: "", accessibilityPrompted: false };
+const EMPTY: Config = { apiKey: "", model: "", accessibilityPrompted: false, launchAtLogin: true };
 
 /** 读取配置。文件不存在时返回空配置，其他 IO 错误向上抛。 */
 export function loadConfig(): Config {
@@ -28,6 +30,8 @@ export function loadConfig(): Config {
 			apiKey: parsed.apiKey ?? "",
 			model: parsed.model ?? "",
 			accessibilityPrompted: parsed.accessibilityPrompted ?? false,
+			// 老配置文件里没有这个字段：默认开，用户显式关掉才为 false
+			launchAtLogin: parsed.launchAtLogin ?? true,
 		};
 	} catch (err) {
 		throw new Error(`配置文件格式错误（${FILE}）：${(err as Error).message}`);
@@ -44,8 +48,8 @@ export function saveConfig(config: Config): void {
 	}
 }
 
-/** 设置窗口能改的字段。其余字段不归它管，别让它覆盖掉。 */
-export type ConfigPatch = Pick<Config, "apiKey" | "model">;
+/** 设置窗口能改的字段。其余字段（比如 accessibilityPrompted）不归它管，别让它覆盖掉。 */
+export type ConfigPatch = Pick<Config, "apiKey" | "model" | "launchAtLogin">;
 
 /**
  * 保存设置窗口改的那两项，其余字段从旧配置带过来。

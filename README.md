@@ -134,11 +134,27 @@ AX 焦点应用：pid=… Xxx       ← AX 认为谁有键盘焦点
 {
   "apiKey": "sk-…",
   "model": "deepseek-v4-flash",
-  "accessibilityPrompted": false
+  "accessibilityPrompted": false,
+  "launchAtLogin": true
 }
 ```
 
 模型列表是从 `GET https://api.deepseek.com/models` 实时拉的，所以 DeepSeek 上新模型后不用改代码，重新点一次「获取模型列表」即可。
+
+## 开机自动启动
+
+默认开启，设置窗口里可以关掉。**只在打包成 `.app` 之后才真正生效**，开发模式下不注册。
+
+原因：开发模式跑的是 `node_modules` 里的那个 `Electron.app`，把它注册成登录项，
+开机拉起来的是没有应用的裸 Electron —— 一个空白窗口，不是 What's This?。
+macOS 也没给「未打包 + 带参数启动」留口子：`app.setLoginItemSettings()` 的
+`path` / `args` 只在 Windows 上管用。与其在你机器上注册一个坏掉的登录项，不如什么都不做。
+
+所以 [src/login-item.ts](src/login-item.ts) 里有一道 `app.isPackaged` 的判断，
+设置窗口在开发模式下会显示这段说明。`config:load` 会额外返回一个 `canLaunchAtLogin`，
+页面用它决定要不要提示。
+
+生效之后随时可以在「系统设置 → 通用 → 登录项与扩展」里确认或关掉。
 
 ## 结构
 
@@ -147,6 +163,7 @@ AX 焦点应用：pid=… Xxx       ← AX 认为谁有键盘焦点
 | [src/main.ts](src/main.ts) | Electron 主进程入口：托盘、右键菜单、取材→摆卡片的编排、日志 |
 | [src/contract.ts](src/contract.ts) | IPC 契约：channel 名字与消息类型（**不许 import electron**，preload 要引） |
 | [src/ipc.ts](src/ipc.ts) | ipcMain 注册。碰应用状态的动作由 main 注入，纯转发的就地实现 |
+| [src/login-item.ts](src/login-item.ts) | 开机自启的注册（只在打包后真正生效，见下） |
 | [src/panel.ts](src/panel.ts) | 结果浮窗：创建、贴到图标下方、显隐、往页面推消息 |
 | [src/settings.ts](src/settings.ts) | 设置窗口 |
 | [src/input.ts](src/input.ts) | 取材优先级：浮窗选区 → 鼠标选区 → 剪切板图片 → 剪切板文字 |

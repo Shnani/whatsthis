@@ -15,7 +15,9 @@ export function openSettings(): void {
 	}
 	win = new BrowserWindow({
 		width: 460,
-		height: 380,
+		// 380 是加「开机自启」那行之前的高度，装不下现在的表单（实测内容 ~400px + 标题栏）。
+		// 端到端测试里有一条断言盯着这个：内容高度不能超过可视高度。
+		height: 460,
 		title: "What's This? 设置",
 		show: false,
 		resizable: false,

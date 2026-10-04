@@ -7,6 +7,7 @@ import { loadConfig, saveConfig, type Config } from "./config.js";
 import { copyTextOf, createHistory, go, push, removeCurrent, viewOf, type Entry, type History } from "./history.js";
 import { gatherInput, keyOf, type Input } from "./input.js";
 import { registerIpc } from "./ipc.js";
+import { applyLaunchAtLogin } from "./login-item.js";
 import * as panel from "./panel.js";
 import { describeSelectionAccess, inspectSelection } from "./selection.js";
 import { closeSettings, openSettings } from "./settings.js";
@@ -223,6 +224,8 @@ app.whenReady().then(() => {
 	panel.setHiddenHandler(abortCurrent);
 	createTray();
 	const config = loadConfig();
+	// 让登录项与配置一致。老配置文件没这个字段，读出来就是默认的开
+	applyLaunchAtLogin(config.launchAtLogin);
 	if (!isConfigured(config)) openSettings();
 	requestAccessibilityOnce(config);
 });

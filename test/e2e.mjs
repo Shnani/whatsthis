@@ -183,10 +183,25 @@ async function main() {
 		await until("配置回填进表单", async () => (await js(sw, "document.getElementById('apiKey').value")).length > 0, 8000);
 		const form = await read(
 			sw,
-			`{hasKey: document.getElementById("apiKey").value.length > 0, model: document.getElementById("model").value, saveEnabled: !document.getElementById("save").disabled}`,
+			`{
+				hasKey: document.getElementById("apiKey").value.length > 0,
+				model: document.getElementById("model").value,
+				saveEnabled: !document.getElementById("save").disabled,
+				launchChecked: document.getElementById("launchAtLogin").checked,
+				launchHintShown: !document.getElementById("launchHint").hidden
+			}`,
 		);
 		check("设置窗口读回了已存的配置", form.hasKey && form.model === before.model, `模型 ${form.model}`);
 		check("「保存」可点", form.saveEnabled);
+		check("开机自启默认开（老配置里没有这个字段）", form.launchChecked);
+		check("开发模式下讲明了不生效", form.launchHintShown);
+
+		// 窗口固定大小且不可缩放，加了行勾选和提示后别把「保存」挤出可视区
+		const fit = await read(
+			sw,
+			`{content: document.body.scrollHeight, view: window.innerHeight, footerBottom: Math.round(document.querySelector("footer").getBoundingClientRect().bottom)}`,
+		);
+		check("内容装得下窗口", fit.content <= fit.view, `内容 ${fit.content}px / 可视 ${fit.view}px，footer 底边 ${fit.footerBottom}px`);
 
 		if (configured) {
 			await js(sw, "document.getElementById('fetch').click();");
@@ -210,6 +225,19 @@ async function main() {
 		check("保存后 Key 还在", saved.apiKey.length > 0);
 		check("保存后模型还在", saved.model === before.model, saved.model);
 		check("保存没抹掉授权标记（这是本次重构修的 bug）", saved.accessibilityPrompted === before.accessibilityPrompted);
+
+		// 开机自启：关掉能存住、再打开也能存住
+		// 状态栏文案两次都是「已保存 ✓」，分不出来，所以直接盯真实配置文件
+		await js(sw, "document.getElementById('launchAtLogin').checked = false; document.getElementById('save').click();");
+		await until("关掉能写进去", () => loadConfig().launchAtLogin === false, 8000);
+		check("关掉开机自启能存住", loadConfig().launchAtLogin === false);
+
+		await js(sw, "document.getElementById('launchAtLogin').checked = true; document.getElementById('save').click();");
+		await until("打开能写进去", () => loadConfig().launchAtLogin === true, 8000);
+		check("再打开能存住", loadConfig().launchAtLogin === true);
+		// 这次用的是开发模式（未打包），上面明明要求「开」，但绝不能真去注册登录项 ——
+		// 注册的是 node_modules 里的 Electron，开机拉起来会是个空白窗口
+		check("开发模式下没有真的注册登录项", app.getLoginItemSettings().openAtLogin === false);
 
 		await js(sw, "document.getElementById('cancel').click();");
 		await until("设置窗口关闭", async () => !find("settings.html"), 5000);

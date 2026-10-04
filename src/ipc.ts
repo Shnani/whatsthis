@@ -1,8 +1,14 @@
 import { ipcMain, shell } from "electron";
-import { mergeConfig, loadConfig, type ConfigPatch } from "./config.js";
+import { mergeConfig, loadConfig, type Config, type ConfigPatch } from "./config.js";
 import { CH, guard } from "./contract.js";
 import { listModels } from "./deepseek.js";
+import { applyLaunchAtLogin, isLaunchAtLoginAvailable } from "./login-item.js";
 import { safeExternalUrl } from "./markdown.js";
+
+/** config:load 的返回：整个配置，外加一个「开机自启能不能生效」的标记（开发模式下不能）。 */
+export interface ConfigView extends Config {
+	canLaunchAtLogin: boolean;
+}
 
 /**
  * 要碰应用状态（历史、浮窗、正在跑的请求）的几个动作，由 main 提供。
@@ -21,8 +27,15 @@ export interface IpcActions {
 }
 
 export function registerIpc(actions: IpcActions): void {
-	ipcMain.handle(CH.configLoad, () => guard(() => loadConfig()));
-	ipcMain.handle(CH.configSave, (_event, patch: ConfigPatch) => guard(() => mergeConfig(patch)));
+	ipcMain.handle(CH.configLoad, () => guard((): ConfigView => ({ ...loadConfig(), canLaunchAtLogin: isLaunchAtLoginAvailable() })));
+	ipcMain.handle(CH.configSave, (_event, patch: ConfigPatch) =>
+		guard(() => {
+			const next = mergeConfig(patch);
+			// 保存后立刻生效，不用等下次启动
+			applyLaunchAtLogin(next.launchAtLogin);
+			return next;
+		}),
+	);
 	ipcMain.handle(CH.modelsList, (_event, apiKey: string) => guard(() => listModels(apiKey)));
 
 	ipcMain.on(CH.page, (_event, delta: number) => actions.page(delta > 0 ? 1 : -1));
