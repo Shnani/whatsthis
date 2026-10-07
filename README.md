@@ -105,7 +105,7 @@ Requires macOS and the Xcode command line tools for `clang`. If the native exten
 
 - Rendered Markdown escapes raw HTML and allows only `http`/`https` links; other schemes are stripped to plain text. Link clicks go through `shell.openExternal`, and the panel blocks `will-navigate`.
 - The model table in `pi-ai` marks DeepSeek as text-only. `resolveModel()` overrides it to accept images; a model that rejects images returns its error in the panel.
-- DeepSeek is the only provider. Another vendor requires changes to `src/deepseek.ts` and `resolveModel()`.
+- DeepSeek is the only provider. Another vendor requires changes to `src/deepseek.ts` and `resolveModel()`, and removing that vendor's SDK from `UNUSED_PROVIDERS` in `scripts/build-dmg.mjs`.
 - Selection reading needs the focused element to expose `AXSelectedText`. Browsers, Notes, and PDF readers generally do; terminals generally do not.
 - Clipboard images larger than 2048 px are downscaled before sending.
 - History lives only in memory and is lost on quit.

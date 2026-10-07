@@ -105,7 +105,7 @@ npm run e2e       # 端到端，真调模型
 
 - 渲染后的 Markdown 把原始 HTML 转义成文本，链接只放行 `http`/`https`，其余协议剥成纯文本。点链接走 `shell.openExternal`，浮窗拦截 `will-navigate`。
 - `pi-ai` 的模型表把 DeepSeek 标成纯文本，`resolveModel()` 覆盖成接受图片。模型若拒绝图片，错误原样显示在浮窗里。
-- 只支持 DeepSeek。换厂商要改 `src/deepseek.ts` 和 `resolveModel()`。
+- 只支持 DeepSeek。换厂商要改 `src/deepseek.ts` 和 `resolveModel()`，还要把该厂商的 SDK 从 `scripts/build-dmg.mjs` 的 `UNUSED_PROVIDERS` 里去掉。
 - 读选区要求焦点元素支持 `AXSelectedText`。浏览器、备忘录、PDF 阅读器通常可以，终端通常不行。
 - 剪切板图片超过 2048px 先等比缩放再发送。
 - 记录只活在内存里，退出即丢。

@@ -58,6 +58,73 @@ const mustExist = ["dist/main.js", "dist/preload.mjs", "src/panel.html", "src/se
 const missing = mustExist.filter((rel) => !fs.existsSync(path.join(appDir, "Contents", "Resources", "app", rel)));
 if (missing.length > 0) throw new Error(`产物缺文件：${missing.join(", ")}`);
 
+/**
+ * pi-ai 把六家厂商的 SDK 全声明成依赖，但它在 dist/providers/*.js 里是按 api 名
+ * 动态 import 的，只有真正用到的那一个会被加载 —— 本应用只走 openai-completions
+ * （见 src/agent.ts 的 resolveModel），其余模块和它们的 SDK 永远不会被 import。
+ *
+ * 代价：以后要多支持一家厂商，得把对应的包从 UNUSED_PROVIDERS 移出去，否则应用
+ * 能装、能启动、能出图标，一到提问才报模块找不到。
+ *
+ * 必须在签名之前调用：签完再动 bundle 里的文件，签名就失效了。
+ */
+const UNUSED_PROVIDERS = [
+	"@anthropic-ai", // providers/anthropic.js
+	"@google", // providers/google.js、google-vertex.js
+	"@mistralai", // providers/mistral.js
+	"@aws-sdk", // providers/amazon-bedrock.js
+	"@smithy", //    ↑ 的传递依赖
+];
+
+function mb(dir) {
+	return Number(execFileSync("du", ["-sk", dir], { encoding: "utf-8" }).split("\t")[0]) / 1024;
+}
+
+function pruneUnusedProviders(appDir) {
+	const appResources = path.join(appDir, "Contents", "Resources", "app");
+	const nm = path.join(appResources, "node_modules");
+	const before = mb(nm);
+
+	for (const pkg of UNUSED_PROVIDERS) fs.rmSync(path.join(nm, pkg), { recursive: true, force: true });
+
+	// 删掉的包会把一批传递依赖留成孤儿。让 npm 重建这棵树，把不再被任何包依赖的
+	// （extraneous）一并清掉，免得手工维护一份迟早会过时的名单。
+	// npm ls 遇到缺失依赖会以非零码退出，但 JSON 照样写在 stdout 上。
+	let json;
+	try {
+		json = execFileSync("npm", ["ls", "--omit=dev", "--all", "--json"], {
+			cwd: appResources,
+			encoding: "utf-8",
+			maxBuffer: 1 << 28,
+			stdio: ["ignore", "pipe", "ignore"],
+		});
+	} catch (err) {
+		json = err.stdout;
+	}
+	const extraneous = new Set();
+	(function walk(node) {
+		for (const [name, dep] of Object.entries(node.dependencies ?? {})) {
+			if (dep.extraneous) extraneous.add(name);
+			walk(dep);
+		}
+	})(JSON.parse(json));
+
+	let orphans = 0;
+	for (const name of extraneous) {
+		const dir = path.join(nm, name);
+		if (fs.existsSync(dir)) {
+			fs.rmSync(dir, { recursive: true, force: true });
+			orphans++;
+		}
+	}
+	console.log(
+		`[dist] node_modules ${before.toFixed(0)}MB -> ${mb(nm).toFixed(0)}MB` +
+			`（去掉 ${UNUSED_PROVIDERS.length} 个厂商 SDK + ${orphans} 个孤儿依赖）`,
+	);
+}
+
+pruneUnusedProviders(appDir);
+
 // 打包器给的 ad-hoc 签名沿用 Electron 自身的 identifier（"Electron"），系统据此
 // 认应用，辅助功能列表里就不是 whatsthis。重新 ad-hoc 签一次把 identifier 拨正。
 // 没有 Developer ID，所以只能 ad-hoc，应用仍会被 Gatekeeper 拦首次启动。
