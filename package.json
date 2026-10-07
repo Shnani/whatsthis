@@ -12,6 +12,7 @@
 		"app": "npm run build && open -a \"$PWD/node_modules/electron/dist/Electron.app\" --args \"$PWD\"",
 		"verify": "npm run build && electron test/verify.mjs",
 		"e2e": "npm run build && electron test/e2e.mjs",
+		"dist": "npm run build && node scripts/build-dmg.mjs",
 		"watch": "tsc --watch"
 	},
 	"dependencies": {
@@ -20,6 +21,7 @@
 		"marked": "^18.0.14"
 	},
 	"devDependencies": {
+		"@electron/packager": "^20.3.0",
 		"@types/node": "^24.3.0",
 		"electron": "^44.5.0",
 		"typescript": "^5.7.3"
