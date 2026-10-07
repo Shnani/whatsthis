@@ -15,8 +15,8 @@
 		"watch": "tsc --watch"
 	},
 	"dependencies": {
-		"@mariozechner/pi-agent-core": "file:mariozechner-pi-agent-core-0.73.0.tgz",
-		"@mariozechner/pi-ai": "file:mariozechner-pi-ai-0.73.0.tgz",
+		"@mariozechner/pi-agent-core": "^0.73.0",
+		"@mariozechner/pi-ai": "^0.73.0",
 		"marked": "^18.0.14"
 	},
 	"devDependencies": {
