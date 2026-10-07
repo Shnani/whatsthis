@@ -2,7 +2,9 @@
 
 [中文](README.zh-CN.md) · **English**
 
-A macOS menu bar app that asks a model exactly one question — *what is this?* — about whatever you have selected or copied. No chat window, no agent framework, no session to manage: the goal is a model on standby, not another interface to open.
+AI agent apps keep getting heavier, as if they were meant to take over everything you do on a computer. But do you really want an AI that can do anything — or one that shows up where it should? That question is what this project is: a demo idea for simplifying the conversation between a person and a model. You select something, then keep selecting from the output to follow up, and get every concept you care about explained without typing a single question.
+
+whatsthis is a macOS menu bar app wrapping [`@mariozechner/pi-agent-core`](https://github.com/badlogic/pi-mono). Select or copy anything you want explained, and the app asks on your behalf: *what is this?* It stays in the menu bar — nothing to open, no prompt to type. When you want to look back, it holds at most 50 cards, each deleted 60 minutes after it was created.
 
 ## Install
 
