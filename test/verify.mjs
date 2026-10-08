@@ -149,6 +149,22 @@ async function main() {
 			}),
 		);
 
+		// --- 4f. 搜索期间把「思考中…」换成「正在搜索网络…」，搜完换回来 ---
+		const afterText = () => api("getComputedStyle(document.getElementById('answer'),'::after').content");
+		const card = (searching) => entry({ id: 22, index: 1, total: 1, kind: "text", text: "T", status: "running", html: "", searching });
+		win.webContents.send(CH.entry, card(undefined));
+		await new Promise((r) => setTimeout(r, 150));
+		const idle = await afterText();
+		win.webContents.send(CH.entry, card(true));
+		await new Promise((r) => setTimeout(r, 150));
+		const busy = await afterText();
+		win.webContents.send(CH.entry, card(false));
+		await new Promise((r) => setTimeout(r, 150));
+		console.log(
+			"searching ->",
+			JSON.stringify({ 平时: idle.includes("思考"), 搜索中: busy.includes("搜索"), 搜完换回: (await afterText()).includes("思考") }),
+		);
+
 		// --- 4c. 滚动：换一条记录回到顶部，同一条重发（收尾）别把读完滚到底的页面拽回去 ---
 		const long = `<p>${"很长的一段答案。".repeat(200)}</p>`;
 		const post = (id) => win.webContents.send(CH.entry, entry({ id, index: id, total: 2, kind: "text", text: "T", html: long, status: "done" }));
@@ -283,6 +299,30 @@ async function main() {
 				scriptEscaped: md.includes("&lt;script&gt;") && !md.includes("<script>"),
 				safeLink: md.includes('href="https://example.com"'),
 				dangerousLinkStripped: !md.includes("javascript:"),
+			}),
+		);
+
+		// --- 8. 搜索结果解析：抓 HTML 这半边没法测，抠结果这半边必须测 ---
+		// 形状照抄真实的 cn.bing.com 响应（<li class="b_algo"> 里 <h2><a href> + b_lineclamp 摘要）
+		const { parseResults } = await import("../dist/search.js");
+		const fixture = [
+			'<ol id="b_results">',
+			'<li class="b_algo" data-id><h2><a href="https://example.com/a&amp;b">A &amp; B 是什么</a></h2>',
+			'<div class="b_caption"><p class="b_lineclamp4 b_algoSlug">简介 &lt;tag&gt; 与 &#x27;引号&#x27;</p></div></li>',
+			'<li class="b_algo"><h2><a href="https://example.com/c">第二条</a></h2><p>没有 lineclamp 的摘要</p></li>',
+			"</ol>",
+		].join("\n");
+		const hits = parseResults(fixture);
+		console.log(
+			"search ->",
+			JSON.stringify({
+				条数: hits.length,
+				标题: hits[0]?.title,
+				链接解了实体: hits[0]?.url === "https://example.com/a&b",
+				摘要解了实体: hits[0]?.snippet === "简介 <tag> 与 '引号'",
+				退到第一个p: hits[1]?.snippet === "没有 lineclamp 的摘要",
+				截断: parseResults(fixture, 1).length === 1,
+				空页面不炸: parseResults("<html>没有结果</html>").length === 0,
 			}),
 		);
 

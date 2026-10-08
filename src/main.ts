@@ -123,6 +123,9 @@ async function sendEntry(entry: Entry, config: Config): Promise<void> {
 		deliver: (html) => {
 			if (isShown(entry)) panel.sendChunk({ id: entry.id, html });
 		},
+		repaint: () => {
+			if (isShown(entry)) panel.showEntry(viewOf(history, entry));
+		},
 	});
 	current = handle;
 	try {

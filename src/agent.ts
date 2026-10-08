@@ -1,6 +1,7 @@
 import { Agent } from "@mariozechner/pi-agent-core";
 import { getModels, type ImageContent, type Model } from "@mariozechner/pi-ai";
 import { BASE_URL } from "./deepseek.js";
+import { webSearchTool } from "./search.js";
 
 const SYSTEM_PROMPT = [
 	"你是 macOS 菜单栏助手。用户会把选中的文字或剪切板里的内容（文字或图片）发给你，并问「这是什么？」。",
@@ -9,6 +10,8 @@ const SYSTEM_PROMPT = [
 	"图片：说明主体、场景、以及图中可读的关键文字。",
 	"代码或报错：说明语言/技术栈、用途、以及关键问题在哪。",
 	"普通文字：说明它是什么（术语、句子、链接、数据等）并给出必要的解释。",
+	"涉及最新消息、版本、价格这类会过时的内容，或你对这个事实没把握时，先用 web_search 查一次，答案里标出来源链接。",
+	"反过来：常识解释、纯代码和语法问题不要搜 —— 每张卡片都搜一遍只会白白让用户多等几秒。",
 	"回答控制在 200 字以内，除非内容确实需要展开。",
 ].join("\n");
 
@@ -46,6 +49,8 @@ export interface AskOptions {
 	/** 剪切板图片 */
 	image?: ImageContent;
 	onDelta: (delta: string) => void;
+	/** 工具开始/结束。浮窗拿它显示「正在搜索网络…」 */
+	onTool?: (active: boolean) => void;
 }
 
 export interface AskRun {
@@ -65,15 +70,30 @@ export function ask(opts: AskOptions): AskRun {
 		initialState: {
 			systemPrompt: SYSTEM_PROMPT,
 			model: resolveModel(opts.model),
+			// 唯一一个工具：要不要搜由模型自己按 system prompt 判断
+			tools: [webSearchTool],
 		},
 		getApiKey: () => opts.apiKey,
 	});
 
 	let failure: string | null = null;
+	// 模型可能一次发多个并行工具调用，start/end 是各自成对的，所以数着来，
+	// 只认「一个都不剩」才算搜完
+	let runningTools = 0;
 
 	agent.subscribe((event) => {
 		if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
 			opts.onDelta(event.assistantMessageEvent.delta);
+			return;
+		}
+		if (event.type === "tool_execution_start") {
+			runningTools++;
+			opts.onTool?.(true);
+			return;
+		}
+		if (event.type === "tool_execution_end") {
+			runningTools = Math.max(0, runningTools - 1);
+			opts.onTool?.(runningTools > 0);
 			return;
 		}
 		if (event.type === "message_end" && event.message.role === "assistant") {
