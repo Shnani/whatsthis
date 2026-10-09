@@ -174,7 +174,19 @@ async function main() {
 			check("中断后页面有交代（半截回答或「已取消」）", after.trim().length > 0, `「${after.slice(0, 30).replace(/\s+/g, " ")}」`);
 		}
 
-		// ---- 7. 设置窗口：加载 / 拉模型列表 / 保存 ----
+		// ---- 7. 联网搜索：只会因为外部改版而红的一条断言 ----
+		// 抓 HTML 这套天生脆，就得让它在真实 Bing 上跑一次，才知道今天还认不认得结果页
+		console.log("\n[联网搜索]");
+		const { search } = await import("../dist/search.js");
+		try {
+			const hits = await search("electron 是什么");
+			check("抓到搜索结果", hits.length > 0, `${hits.length} 条，首条「${hits[0]?.title}」`);
+			check("每条都带 http 链接", hits.every((h) => h.url.startsWith("http")));
+		} catch (err) {
+			check("抓到搜索结果", false, err.message);
+		}
+
+		// ---- 8. 设置窗口：加载 / 拉模型列表 / 保存 ----
 		console.log("\n[设置窗口]");
 		settings.openSettings();
 		if (!(await until("设置窗口出现", async () => Boolean(find("settings.html")), 10000))) return;

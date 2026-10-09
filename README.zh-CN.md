@@ -29,6 +29,8 @@ xattr -cr /Applications/whatsthis.app
 
 右键点图标：辅助功能权限 / 设置 / 退出。
 
+模型手里有一个 `web_search` 工具，搜不搜由它自己按内容判断：新闻、版本、价格这类会过时的，以及它没把握的事实，会先查一次；解释代码和常识不用查。搜索期间浮窗显示「正在搜索网络…」，答案里会带来源链接。
+
 答完之后内容框不再接受点击，手滑不会重复发送。想再问一次，重新点菜单栏图标。
 
 ## 记录
@@ -95,6 +97,7 @@ npm run e2e       # 端到端，真调模型
 | `native/ax.m` | N-API 扩展：进程内调辅助功能 API 读选中文字 |
 | `src/selection.ts` | 加载扩展，整理结果 |
 | `src/agent.ts` | `pi-agent-core` 封装 |
+| `src/search.ts` | `web_search` 工具：抓搜索结果页 |
 | `src/deepseek.ts` | DeepSeek 接口地址与模型列表 |
 | `src/config.ts` | 配置读写，失败必抛异常 |
 | `src/preload.mts` | 给两个页面暴露的 `contextBridge` |
@@ -110,6 +113,7 @@ npm run e2e       # 端到端，真调模型
 - 只支持 DeepSeek。换厂商要改 `src/deepseek.ts` 和 `resolveModel()`，还要把该厂商的 SDK 从 `scripts/build-dmg.mjs` 的 `UNUSED_PROVIDERS` 里去掉。
 - 读选区要求焦点元素支持 `AXSelectedText`。浏览器、备忘录、PDF 阅读器通常可以，终端通常不行。
 - 剪切板图片超过 2048px 先等比缩放再发送。
+- `web_search` 是抓页面：请求搜索结果页，再从 HTML 里抠标题、链接和摘要。搜索引擎改版、弹人机校验、或短时间请求太多被限流，它就会失效 —— 这时直接报错，不会悄悄退回「凭记忆回答」。另外它会把模型拟的搜索词发给搜索引擎，这是除 DeepSeek 之外的第二条出网路径。
 - 记录只活在内存里，退出即丢。
 - 「浮窗里选中内容 = 追问」不看窗口有没有焦点，所以选中后先收起浮窗再点图标，仍会被当成追问。
 - `.app` 未签名、未公证。

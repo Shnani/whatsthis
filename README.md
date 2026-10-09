@@ -29,6 +29,8 @@ Collection makes no network request. The panel shows the content as a card label
 
 Right-click the icon for Accessibility permission, Settings, and Quit.
 
+The model has a `web_search` tool and decides on its own whether to call it — for news, versions, and prices, and for facts it is unsure about; not for explaining code or common terms. While it searches, the panel says `正在搜索网络…` and the answer comes back with source links.
+
 Once an answer arrives the content box stops accepting clicks, so a stray click cannot re-send. Click the tray icon again to ask again.
 
 ## History
@@ -95,6 +97,7 @@ Requires macOS and the Xcode command line tools for `clang`. If the native exten
 | `native/ax.m` | N-API extension: reads the selection through the Accessibility API |
 | `src/selection.ts` | Loads the extension, formats its result |
 | `src/agent.ts` | `pi-agent-core` wrapper |
+| `src/search.ts` | `web_search` tool: scrapes the search result page |
 | `src/deepseek.ts` | DeepSeek endpoint and model list |
 | `src/config.ts` | Config read and write; throws on failure |
 | `src/preload.mts` | `contextBridge` surface for both pages |
@@ -110,6 +113,7 @@ Requires macOS and the Xcode command line tools for `clang`. If the native exten
 - DeepSeek is the only provider. Another vendor requires changes to `src/deepseek.ts` and `resolveModel()`, and removing that vendor's SDK from `UNUSED_PROVIDERS` in `scripts/build-dmg.mjs`.
 - Selection reading needs the focused element to expose `AXSelectedText`. Browsers, Notes, and PDF readers generally do; terminals generally do not.
 - Clipboard images larger than 2048 px are downscaled before sending.
+- `web_search` is scraping: it requests the search result page and pulls titles, links, and snippets out of the HTML. A redesign, a bot check, or rate limiting breaks it, and it then throws instead of silently answering from memory. It also sends the query the model wrote to that search engine — a second outbound path besides DeepSeek.
 - History lives only in memory and is lost on quit.
 - The "selected text in the panel means follow-up" rule does not check window focus, so selecting text and collapsing the panel before clicking the tray icon still registers as a follow-up.
 - The `.app` is unsigned and unnotarized.
