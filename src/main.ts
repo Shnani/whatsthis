@@ -14,6 +14,16 @@ import { closeSettings, openSettings } from "./settings.js";
 
 const ROOT = app.getAppPath();
 const QUESTION = "这是什么？";
+
+/**
+ * macOS 把菜单栏图标的位置按应用记在偏好里，键是 `NSStatusItem Preferred Position <autosaveName>`，
+ * 值是距屏幕右边缘的点数：值越小越靠右（贴系统图标），越大越靠左，空间不够时系统直接丢掉最左边
+ * 那个 —— 在有刘海的屏上就是被刘海吞掉的那块。BetterDisplay 存的是 381，位于刘海右侧那条可见带里。
+ * 这个 guid 就是 autosaveName（Electron 会转小写后交给 AppKit），错开 381 一点，免得和它挤同一格。
+ * 生成一次后不要再改：改了等于换名字，位置会从头开始。
+ */
+const TRAY_GUID = "6b1f0a3c-9d2e-4f57-8a10-2c4d6e8f0a1b";
+const TRAY_POSITION_KEY = `NSStatusItem Preferred Position ${TRAY_GUID}`;
 const START_LOG = path.join(os.homedir(), ".whatsthis", "last-start.log");
 const CLICK_LOG = path.join(os.homedir(), ".whatsthis", "last-click.log");
 
@@ -123,6 +133,9 @@ async function sendEntry(entry: Entry, config: Config): Promise<void> {
 		deliver: (html) => {
 			if (isShown(entry)) panel.sendChunk({ id: entry.id, html });
 		},
+		repaint: () => {
+			if (isShown(entry)) panel.showEntry(viewOf(history, entry));
+		},
 	});
 	current = handle;
 	try {
@@ -168,7 +181,9 @@ function showSelectionAccess(): void {
 function createTray(): void {
 	const icon = nativeImage.createFromPath(path.join(ROOT, "assets", "trayTemplate.png"));
 	icon.setTemplateImage(true);
-	tray = new Tray(icon);
+	// 只在「还没有位置」时兜底；用户自己 Cmd 拖动过的位置优先级更高，不会被这里盖掉。
+	systemPreferences.registerDefaults({ [TRAY_POSITION_KEY]: 400 });
+	tray = new Tray(icon, TRAY_GUID);
 	tray.setToolTip("这是什么？");
 	tray.on("click", () => void onTrayClick());
 	tray.on("right-click", () => {

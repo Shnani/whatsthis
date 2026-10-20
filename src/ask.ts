@@ -24,8 +24,10 @@ export function runAsk(opts: {
 	history: History;
 	config: Config;
 	deliver: (html: string) => void;
+	/** 整条重画（不是推流式片段）。搜索起落时靠它把状态标出来 */
+	repaint: () => void;
 }): AskHandle {
-	const { entry, history, config, deliver } = opts;
+	const { entry, history, config, deliver, repaint } = opts;
 
 	// Markdown 每来一个分片都要整段重渲染，所以节流；收尾时再补一次完整渲染
 	let answer = "";
@@ -50,6 +52,10 @@ export function runAsk(opts: {
 					answer += delta;
 					if (!timer) timer = setTimeout(flush, RENDER_INTERVAL_MS);
 				},
+				onTool: (active) => {
+					entry.searching = active;
+					repaint();
+				},
 			});
 			await run.done;
 		} catch (err) {
@@ -61,6 +67,8 @@ export function runAsk(opts: {
 			entry.answer = answer;
 			entry.html = renderMarkdown(answer);
 			entry.status = "done";
+			// 搜索中途被中断时 tool_execution_end 未必到，别留下一个卡在「正在搜索网络…」的卡片
+			entry.searching = false;
 		}
 	})();
 

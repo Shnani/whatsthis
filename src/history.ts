@@ -39,6 +39,8 @@ export interface Entry {
 	error?: string;
 	/** 待发送 / 生成中 / 完成 */
 	status: EntryStatus;
+	/** 正在调 web_search；浮窗拿它把「思考中…」换成「正在搜索网络…」 */
+	searching?: boolean;
 	/** 记下来的时刻，用来判断过期 */
 	createdAt: number;
 }
@@ -154,6 +156,7 @@ export interface EntryView {
 	html: string;
 	error?: string;
 	status: EntryStatus;
+	searching?: boolean;
 }
 
 /** 「复制」按钮复制的内容：卡片上摆出来的那个问题，加回答全文。 */
@@ -176,5 +179,6 @@ export function viewOf(h: History, entry: Entry): EntryView {
 		html: entry.html,
 		error: entry.error,
 		status: entry.status,
+		searching: entry.searching,
 	};
 }
